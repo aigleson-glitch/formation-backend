@@ -44,5 +44,21 @@ Garanties : aucune note n'est jamais renvoyée (contrôle serveur + relance), l'
 
 Tutelle parentale : elle prend fin automatiquement au 18e anniversaire de l'enfant (le parent n'a plus accès à son compte).
 
-## Hors phase 1 (à venir)
-Quiz (phase 2), devoirs (3), paiement et expiration à 48 h (4), certificats (5).
+## Phase 2 : quiz et QCM
+Types de questions : choix unique (`single`), choix multiple (`multiple`, tout ou rien) et vrai/faux (`true_false`).
+
+**Formateur** (préfixe `/studio`) : `POST /modules/:id/assessments`, `GET|PATCH|DELETE /assessments/:id`,
+`POST /assessments/:id/questions`, `PATCH|DELETE /questions/:id`.
+Dès qu'un élève a commencé un quiz, sa structure est figée (seuls les textes et explications restent modifiables).
+La publication d'une formation est refusée si un quiz n'a aucune question.
+
+**Élève** : `GET /assessments/:id` (fiche, tentatives restantes), `POST /assessments/:id/attempts` (démarrer ou reprendre),
+`POST /attempts/:id/submit` (`{ "answers": [{ "questionId", "optionIds": [] }] }`), `GET /attempts/:id` (reprise ou correction).
+La notation est faite côté serveur. Avant la soumission, ni bonnes réponses ni explications ne sont envoyées ;
+après, l'élève reçoit sa note, les bonnes réponses et les explications. Un module devient « compétent » quand toutes ses
+évaluations obligatoires sont réussies, ce qui débloque le module suivant. Temps limite : 60 s de marge, puis la tentative est close à 0 %.
+
+Test de bout en bout (crée une formation de test non publiée et un apprenant de test) : `node scripts/smoke-quiz.mjs`
+
+## Hors phases 1 et 2 (à venir)
+Devoirs (3), paiement et expiration à 48 h (4), certificats (5).

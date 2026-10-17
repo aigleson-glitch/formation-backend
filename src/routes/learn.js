@@ -88,7 +88,7 @@ router.get('/my/enrollments/:id/continue', wrap(async (req, res) => {
 }));
 
 // Règle 1 : contenu visible seulement si inscrit ET paiement confirmé (ou gratuit) → statut « active » ou « completed »
-async function requireActiveEnrollment(userId, where) {
+export async function requireActiveEnrollment(userId, where) {
   const e = await prisma.enrollment.findFirst({ where: { ...where, userId } });
   if (!e) throw new HttpError(403, 'Vous n\'êtes pas inscrit à cette formation');
   if (e.status === 'pending') throw new HttpError(402, 'Paiement requis pour accéder au contenu');

@@ -7,6 +7,8 @@ import catalogRoutes from "./routes/catalog.js";
 import learnRoutes from "./routes/learn.js";
 import studioRoutes from "./routes/studio.js";
 import studioAiRoutes from "./routes/studioAi.js";
+import studioQuizRoutes from "./routes/studioQuiz.js";
+import quizRoutes from "./routes/quiz.js";
 import practiceRoutes from "./routes/practice.js";
 
 export function createApp() {
@@ -23,8 +25,10 @@ export function createApp() {
   app.use("/parent", parentRoutes);
   app.use("/studio", studioRoutes);
   app.use("/studio", studioAiRoutes);
+  app.use("/studio", studioQuizRoutes);
   app.use("/practice", practiceRoutes);
   app.use("/", catalogRoutes);
+  app.use("/", quizRoutes);
   app.use("/", learnRoutes);
 
   app.use((req, res) => res.status(404).json({ error: "Route introuvable" }));

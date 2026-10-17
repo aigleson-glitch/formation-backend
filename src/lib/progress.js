@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { moduleOutcome } from './quiz.js';
 
 /**
  * Règle 2 : progression = (leçons terminées + évaluations réussies) / (total leçons + total évaluations)
@@ -44,4 +45,35 @@ export async function isModuleUnlocked(enrollmentId, course, module) {
     orderBy: { position: 'desc' },
   });
   return previous ? isModuleCompetent(enrollmentId, previous) : true;
+}
+
+/**
+ * Recalcule le résultat d'un module après une évaluation (règle 5) :
+ * « compétent » quand toutes les évaluations obligatoires sont réussies (quiz ou devoir noté).
+ * Le score du module est la moyenne des meilleures notes de quiz ; la date de réussite est conservée.
+ */
+export async function recomputeModuleResult(enrollmentId, moduleId) {
+  const required = await prisma.assessment.findMany({ where: { moduleId, isRequired: true }, select: { id: true } });
+  const ids = required.map((a) => a.id);
+  const [attempts, subs, existing] = await Promise.all([
+    prisma.attempt.findMany({
+      where: { enrollmentId, assessmentId: { in: ids }, status: 'submitted' },
+      select: { assessmentId: true, scorePct: true, passed: true },
+    }),
+    prisma.submission.findMany({ where: { enrollmentId, assessmentId: { in: ids }, passed: true }, select: { assessmentId: true } }),
+    prisma.moduleResult.findUnique({ where: { enrollmentId_moduleId: { enrollmentId, moduleId } } }),
+  ]);
+  const passedIds = new Set([...attempts.filter((a) => a.passed).map((a) => a.assessmentId), ...subs.map((s) => s.assessmentId)]);
+  const best = new Map();
+  for (const a of attempts) {
+    const score = Number(a.scorePct ?? 0);
+    if (!best.has(a.assessmentId) || score > best.get(a.assessmentId)) best.set(a.assessmentId, score);
+  }
+  const { status, scorePct } = moduleOutcome(ids, passedIds, best);
+  const completedAt = status === 'competent' ? (existing?.completedAt ?? new Date()) : null;
+  return prisma.moduleResult.upsert({
+    where: { enrollmentId_moduleId: { enrollmentId, moduleId } },
+    create: { enrollmentId, moduleId, status, scorePct, completedAt },
+    update: { status, scorePct, completedAt },
+  });
 }

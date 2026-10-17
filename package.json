@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
-    "test": "node --test"
+    "test": "node --test",
+    "smoke:quiz": "node scripts/smoke-quiz.mjs"
   },
   "prisma": { "seed": "node prisma/seed.js" },
   "dependencies": {

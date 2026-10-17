@@ -85,6 +85,9 @@ router.post('/courses/:id/publish', validate(z.object({ published: z.boolean() }
     if (course.audiences.length === 0) throw new HttpError(422, 'Choisissez au moins un public cible');
     const lessons = await prisma.lesson.count({ where: { chapter: { module: { courseId: course.id } } } });
     if (lessons === 0) throw new HttpError(422, 'Ajoutez au moins une leçon avant de publier');
+    // Un quiz vide bloquerait le module pour toujours : il faut au moins une question
+    const emptyQuizzes = await prisma.assessment.count({ where: { module: { courseId: course.id }, type: { in: ['quiz', 'mcq'] }, questions: { none: {} } } });
+    if (emptyQuizzes > 0) throw new HttpError(422, 'Un quiz ne contient aucune question : ajoutez-en ou supprimez-le avant de publier');
     // Règle 15 revérifiée à la publication : tous les formateurs affectés doivent être habilités
     if (course.audiences.some((a) => a.ageGroup !== 'adult')) {
       const bad = await prisma.courseInstructor.count({ where: { courseId: course.id, user: { canTeachMinors: false } } });
