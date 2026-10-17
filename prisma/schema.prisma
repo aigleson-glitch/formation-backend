@@ -1,0 +1,618 @@
+// Plateforme de formation en ligne (informatique, anglais) — enfants (5-12), adolescents (13-17), adultes (18+)
+// Schéma Prisma v1.1 — PostgreSQL
+// Convention : champs camelCase côté code, colonnes et tables en snake_case côté base.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum Role {
+  learner
+  parent
+  instructor
+  admin
+
+  @@map("user_role")
+}
+
+enum AgeGroup {
+  child
+  teen
+  adult
+
+  @@map("age_group")
+}
+
+enum GuardianRelationship {
+  mother
+  father
+  guardian
+  other
+
+  @@map("guardian_relationship")
+}
+
+enum GuardianshipStatus {
+  pending
+  active
+  revoked
+
+  @@map("guardianship_status")
+}
+
+enum Level {
+  beginner
+  intermediate
+  advanced
+
+  @@map("course_level")
+}
+
+enum LessonType {
+  text
+  video
+  audio
+  pdf
+
+  @@map("lesson_type")
+}
+
+enum EnrollmentStatus {
+  pending
+  active
+  completed
+  cancelled
+
+  @@map("enrollment_status")
+}
+
+enum AssessmentType {
+  quiz
+  mcq
+  assignment
+  portfolio
+
+  @@map("assessment_type")
+}
+
+enum QuestionType {
+  single
+  multiple
+  true_false
+
+  @@map("question_type")
+}
+
+enum AttemptStatus {
+  in_progress
+  submitted
+
+  @@map("attempt_status")
+}
+
+enum SubmissionStatus {
+  submitted
+  in_review
+  graded
+  resubmit
+
+  @@map("submission_status")
+}
+
+enum ModuleResultStatus {
+  competent
+  not_yet
+
+  @@map("module_result_status")
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+
+  @@map("payment_status")
+}
+
+enum SupportStatus {
+  open
+  answered
+  closed
+
+  @@map("support_status")
+}
+
+// ─────────────────────────────────────────────
+// Utilisateurs, parents et enfants
+// ─────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String?   @unique // peut être vide pour un enfant
+  username       String?   @unique // connexion simplifiée des enfants
+  passwordHash   String    @map("password_hash")
+  firstName      String    @map("first_name")
+  lastName       String    @map("last_name")
+  phone          String?
+  birthDate      DateTime? @map("birth_date") @db.Date
+  ageGroup       AgeGroup? @map("age_group") // recalculé depuis birthDate par le backend
+  role           Role      @default(learner)
+  canTeachMinors Boolean   @default(false) @map("can_teach_minors")
+  locale         String    @default("fr")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  asParent        Guardianship[]      @relation("GuardianshipParent")
+  asChild         Guardianship[]      @relation("GuardianshipChild")
+  instructedCourses CourseInstructor[]
+  enrollments     Enrollment[]
+  payments        Payment[]
+  notes           Note[]
+  gradedSubmissions Submission[]      @relation("SubmissionGrader")
+  supportMessages SupportMessage[]    @relation("SupportAuthor")
+  supportReplies  SupportMessage[]    @relation("SupportReplier")
+  practiceSessions PracticeSession[]
+
+  @@index([ageGroup])
+  @@index([role])
+  @@map("users")
+}
+
+model Guardianship {
+  id               String               @id @default(uuid()) @db.Uuid
+  parentId         String               @map("parent_id") @db.Uuid
+  childId          String               @map("child_id") @db.Uuid
+  relationship     GuardianRelationship
+  status           GuardianshipStatus   @default(pending)
+  consentGivenAt   DateTime?            @map("consent_given_at")
+  revokedAt        DateTime?            @map("revoked_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  parent User @relation("GuardianshipParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child  User @relation("GuardianshipChild", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@index([parentId])
+  @@index([childId])
+  @@map("guardianships")
+}
+
+// ─────────────────────────────────────────────
+// Catalogue : catégories, formations, modules, chapitres, leçons
+// ─────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  courses Course[]
+
+  @@map("categories")
+}
+
+model Course {
+  id               String   @id @default(uuid()) @db.Uuid
+  categoryId       String   @map("category_id") @db.Uuid
+  title            String
+  slug             String   @unique
+  description      String?  @db.Text
+  level            Level    @default(beginner)
+  language         String   @default("fr")
+  price            Decimal  @default(0) @db.Decimal(12, 2)
+  currency         String   @default("XAF")
+  defaultPassMark  Int      @default(70) @map("default_pass_mark")
+  sequentialUnlock Boolean  @default(false) @map("sequential_unlock")
+  coverUrl         String?  @map("cover_url")
+  isPublished      Boolean  @default(false) @map("is_published")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  category    Category           @relation(fields: [categoryId], references: [id])
+  audiences   CourseAudience[]
+  instructors CourseInstructor[]
+  modules     Module[]
+  enrollments Enrollment[]
+  payments    Payment[]
+
+  @@index([categoryId])
+  @@index([isPublished])
+  @@map("courses")
+}
+
+// Groupes d'âge auxquels s'adresse une formation
+model CourseAudience {
+  courseId String   @map("course_id") @db.Uuid
+  ageGroup AgeGroup @map("age_group")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, ageGroup])
+  @@index([ageGroup])
+  @@map("course_audiences")
+}
+
+model CourseInstructor {
+  courseId String @map("course_id") @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, userId])
+  @@map("course_instructors")
+}
+
+model Module {
+  id          String   @id @default(uuid()) @db.Uuid
+  courseId    String   @map("course_id") @db.Uuid
+  title       String
+  description String?  @db.Text
+  position    Int
+  imageUrl    String?  @map("image_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapters    Chapter[]
+  assessments Assessment[]
+  results     ModuleResult[]
+
+  @@index([courseId, position])
+  @@map("modules")
+}
+
+model Chapter {
+  id        String   @id @default(uuid()) @db.Uuid
+  moduleId  String   @map("module_id") @db.Uuid
+  title     String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  module  Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+  aiProfile ChapterAiProfile?
+  practiceSessions PracticeSession[]
+
+  @@index([moduleId, position])
+  @@map("chapters")
+}
+
+model Lesson {
+  id          String     @id @default(uuid()) @db.Uuid
+  chapterId   String     @map("chapter_id") @db.Uuid
+  title       String
+  type        LessonType @default(text)
+  content     String?    @db.Text // texte enrichi
+  mediaUrl    String?    @map("media_url")
+  durationSec Int?       @map("duration_sec")
+  position    Int
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  chapter  Chapter          @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  progress LessonProgress[]
+  notes    Note[]
+
+  @@index([chapterId, position])
+  @@map("lessons")
+}
+
+// ─────────────────────────────────────────────
+// Inscriptions et progression
+// ─────────────────────────────────────────────
+
+model Enrollment {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  courseId    String           @map("course_id") @db.Uuid
+  status      EnrollmentStatus @default(pending)
+  enrolledAt  DateTime         @default(now()) @map("enrolled_at")
+  completedAt DateTime?        @map("completed_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course         Course           @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  lessonProgress LessonProgress[]
+  attempts       Attempt[]
+  submissions    Submission[]
+  moduleResults  ModuleResult[]
+  certificate    Certificate?
+  payments       Payment[]
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  id           String   @id @default(uuid()) @db.Uuid
+  enrollmentId String   @map("enrollment_id") @db.Uuid
+  lessonId     String   @map("lesson_id") @db.Uuid
+  completedAt  DateTime @default(now()) @map("completed_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([enrollmentId])
+  @@map("lesson_progress")
+}
+
+// ─────────────────────────────────────────────
+// Évaluations : quiz, QCM, devoirs, portfolio
+// ─────────────────────────────────────────────
+
+model Assessment {
+  id           String         @id @default(uuid()) @db.Uuid
+  moduleId     String         @map("module_id") @db.Uuid
+  type         AssessmentType
+  title        String
+  instructions String?        @db.Text
+  passMark     Int            @default(70) @map("pass_mark")
+  maxAttempts  Int            @default(3) @map("max_attempts")
+  timeLimitMin Int?           @map("time_limit_min")
+  isRequired   Boolean        @default(true) @map("is_required")
+  position     Int
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  module      Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  questions   Question[]
+  attempts    Attempt[]
+  submissions Submission[]
+
+  @@index([moduleId, position])
+  @@map("assessments")
+}
+
+model Question {
+  id           String       @id @default(uuid()) @db.Uuid
+  assessmentId String       @map("assessment_id") @db.Uuid
+  type         QuestionType @default(single)
+  text         String       @db.Text
+  explanation  String?      @db.Text
+  points       Int          @default(1)
+  position     Int
+
+  assessment Assessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  options    QuestionOption[]
+  answers    AttemptAnswer[]
+
+  @@index([assessmentId, position])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String  @id @default(uuid()) @db.Uuid
+  questionId String  @map("question_id") @db.Uuid
+  text       String
+  isCorrect  Boolean @default(false) @map("is_correct")
+  position   Int
+
+  question Question              @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  chosen   AttemptAnswerOption[]
+
+  @@index([questionId, position])
+  @@map("question_options")
+}
+
+// Tentatives de quiz et QCM (notation automatique côté serveur)
+model Attempt {
+  id           String        @id @default(uuid()) @db.Uuid
+  assessmentId String        @map("assessment_id") @db.Uuid
+  enrollmentId String        @map("enrollment_id") @db.Uuid
+  attemptNo    Int           @map("attempt_no")
+  startedAt    DateTime      @default(now()) @map("started_at")
+  submittedAt  DateTime?     @map("submitted_at")
+  scorePct     Decimal?      @map("score_pct") @db.Decimal(5, 2)
+  passed       Boolean?
+  status       AttemptStatus @default(in_progress)
+
+  assessment Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollment Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  answers    AttemptAnswer[]
+
+  @@unique([assessmentId, enrollmentId, attemptNo])
+  @@index([enrollmentId, assessmentId])
+  @@map("attempts")
+}
+
+model AttemptAnswer {
+  id            String  @id @default(uuid()) @db.Uuid
+  attemptId     String  @map("attempt_id") @db.Uuid
+  questionId    String  @map("question_id") @db.Uuid
+  isCorrect     Boolean? @map("is_correct")
+  pointsAwarded Decimal @default(0) @map("points_awarded") @db.Decimal(6, 2)
+
+  attempt         Attempt               @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question        Question              @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptions AttemptAnswerOption[]
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
+}
+
+model AttemptAnswerOption {
+  attemptAnswerId String @map("attempt_answer_id") @db.Uuid
+  optionId        String @map("option_id") @db.Uuid
+
+  attemptAnswer AttemptAnswer  @relation(fields: [attemptAnswerId], references: [id], onDelete: Cascade)
+  option        QuestionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([attemptAnswerId, optionId])
+  @@map("attempt_answer_options")
+}
+
+// Devoirs et portfolio corrigés par un formateur
+model Submission {
+  id           String           @id @default(uuid()) @db.Uuid
+  assessmentId String           @map("assessment_id") @db.Uuid
+  enrollmentId String           @map("enrollment_id") @db.Uuid
+  attemptNo    Int              @default(1) @map("attempt_no")
+  fileUrl      String?          @map("file_url")
+  linkUrl      String?          @map("link_url")
+  submittedAt  DateTime         @default(now()) @map("submitted_at")
+  status       SubmissionStatus @default(submitted)
+  graderId     String?          @map("grader_id") @db.Uuid
+  scorePct     Decimal?         @map("score_pct") @db.Decimal(5, 2)
+  passed       Boolean?
+  feedback     String?          @db.Text
+  gradedAt     DateTime?        @map("graded_at")
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  grader     User?      @relation("SubmissionGrader", fields: [graderId], references: [id], onDelete: SetNull)
+
+  @@unique([assessmentId, enrollmentId, attemptNo])
+  @@index([status])
+  @@index([enrollmentId, assessmentId])
+  @@map("submissions")
+}
+
+model ModuleResult {
+  id           String             @id @default(uuid()) @db.Uuid
+  enrollmentId String             @map("enrollment_id") @db.Uuid
+  moduleId     String             @map("module_id") @db.Uuid
+  scorePct     Decimal?           @map("score_pct") @db.Decimal(5, 2)
+  status       ModuleResultStatus @default(not_yet)
+  completedAt  DateTime?          @map("completed_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  module     Module     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, moduleId])
+  @@map("module_results")
+}
+
+// ─────────────────────────────────────────────
+// Certificats et paiements
+// ─────────────────────────────────────────────
+
+model Certificate {
+  id           String   @id @default(uuid()) @db.Uuid
+  enrollmentId String   @unique @map("enrollment_id") @db.Uuid
+  code         String   @unique // code public de vérification
+  issuedAt     DateTime @default(now()) @map("issued_at")
+  pdfUrl       String?  @map("pdf_url")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  @@map("certificates")
+}
+
+model Payment {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid // celui qui paie : le parent pour un mineur
+  courseId     String        @map("course_id") @db.Uuid
+  enrollmentId String?       @map("enrollment_id") @db.Uuid
+  amount       Decimal       @db.Decimal(12, 2)
+  currency     String        @default("XAF")
+  provider     String
+  providerRef  String?       @unique @map("provider_ref")
+  status       PaymentStatus @default(pending)
+  paidAt       DateTime?     @map("paid_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  // Restrict : un paiement est une pièce comptable, on anonymise l'utilisateur au lieu de le supprimer
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  course     Course      @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────
+// Notes personnelles et support
+// ─────────────────────────────────────────────
+
+model Note {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  lessonId  String   @map("lesson_id") @db.Uuid
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lessonId])
+  @@map("notes")
+}
+
+model SupportMessage {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  subject     String
+  body        String        @db.Text
+  status      SupportStatus @default(open)
+  reply       String?       @db.Text
+  repliedById String?       @map("replied_by") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  user      User  @relation("SupportAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  repliedBy User? @relation("SupportReplier", fields: [repliedById], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("support_messages")
+}
+
+// ─────────────────────────────────────────────
+// Oral IA : espace entraînement
+// ─────────────────────────────────────────────
+
+// Profil d'un chapitre pour le tuteur IA (mots-clés, règles, tâches orales). Le contenu JSON est validé par le backend.
+model ChapterAiProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  chapterId String   @unique @map("chapter_id") @db.Uuid
+  version   Int      @default(1)
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@map("chapter_ai_profiles")
+}
+
+// Séance d'entraînement : aucune note, historique court, purgée après expiration. L'audio n'est jamais conservé.
+model PracticeSession {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  chapterId       String   @map("chapter_id") @db.Uuid
+  focus           Json?                                  // { type: "all" | "grammar" | "vocabulary", grammarId? }
+  currentQuestion Json?    @map("current_question")      // question en attente de réponse
+  turns           Json     @default("[]")                // [{ question, transcript, feedback }]
+  createdAt       DateTime @default(now()) @map("created_at")
+  expiresAt       DateTime @map("expires_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("practice_sessions")
+}

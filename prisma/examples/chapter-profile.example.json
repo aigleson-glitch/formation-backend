@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "REMPLACER-PAR-L-ID-DU-CHAPITRE",
+  "linkedLessonIds": ["REMPLACER-PAR-ID-LECON-1", "REMPLACER-PAR-ID-LECON-2"],
+  "title": "Talking about past experiences",
+  "level": "A2",
+  "targetLanguage": "en",
+  "teachingLanguage": "fr",
+  "objectives": [
+    "Say what you have done in your life without giving a date",
+    "Ask a classmate about their experiences",
+    "Tell the difference between an experience (present perfect) and a finished event (past simple)"
+  ],
+  "keywords": [
+    {
+      "id": "kw-travel-abroad",
+      "term": "travel abroad",
+      "partOfSpeech": "verb phrase",
+      "definition": "to go to another country",
+      "translationTeaching": "voyager à l'étranger",
+      "example": "I have never travelled abroad."
+    },
+    {
+      "id": "kw-ever",
+      "term": "ever",
+      "partOfSpeech": "adverb",
+      "definition": "at any time in your life (used in questions)",
+      "translationTeaching": "déjà (dans une question)",
+      "example": "Have you ever eaten fufu?"
+    },
+    {
+      "id": "kw-never",
+      "term": "never",
+      "partOfSpeech": "adverb",
+      "definition": "at no time in your life",
+      "translationTeaching": "jamais",
+      "example": "She has never seen the sea."
+    },
+    {
+      "id": "kw-already",
+      "term": "already",
+      "partOfSpeech": "adverb",
+      "definition": "before now, sooner than expected",
+      "translationTeaching": "déjà (dans une phrase affirmative)",
+      "example": "I have already finished my homework."
+    },
+    {
+      "id": "kw-yet",
+      "term": "yet",
+      "partOfSpeech": "adverb",
+      "definition": "until now (used in questions and negative sentences)",
+      "translationTeaching": "encore / déjà (questions et négations)",
+      "example": "I haven't called my sister yet."
+    },
+    {
+      "id": "kw-experience",
+      "term": "experience",
+      "partOfSpeech": "noun",
+      "definition": "something that happened to you",
+      "translationTeaching": "expérience",
+      "example": "Riding a boat on the river was a great experience."
+    }
+  ],
+  "grammar": [
+    {
+      "id": "gr-present-perfect-form",
+      "title": "Present perfect: form",
+      "rule": "Use have/has + past participle. Use it to talk about experiences in your life, when the exact time is not important or not given.",
+      "forms": {
+        "affirmative": "I/you/we/they have + past participle; he/she/it has + past participle",
+        "negative": "have not (haven't) / has not (hasn't) + past participle",
+        "question": "Have/Has + subject + past participle?"
+      },
+      "examples": [
+        { "correct": "I have visited Pointe-Noire twice.", "incorrect": "I have visit Pointe-Noire twice.", "note": "After have/has we need the past participle." },
+        { "correct": "Has she ever travelled by plane?", "incorrect": "Does she ever travelled by plane?", "note": "Do not use do/does with the present perfect." }
+      ],
+      "commonMistakes": [
+        "Using the infinitive instead of the past participle (I have go)",
+        "Using has with I/you/we/they",
+        "Forgetting have/has"
+      ],
+      "frenchSpeakerTraps": [
+        "In French the passé composé is also used for finished past events; in English we use the past simple for those."
+      ]
+    },
+    {
+      "id": "gr-present-perfect-vs-past-simple",
+      "title": "Present perfect or past simple?",
+      "rule": "If we say or ask WHEN (yesterday, last year, in 2019, two days ago), use the past simple. If the time is not given and the experience matters now, use the present perfect.",
+      "forms": {},
+      "examples": [
+        { "correct": "I have been to Brazzaville. I went there last year.", "incorrect": "I have been to Brazzaville last year.", "note": "last year = finished time, so past simple (went)." }
+      ],
+      "commonMistakes": [
+        "Using the present perfect with a finished time (I have seen him yesterday)"
+      ],
+      "frenchSpeakerTraps": [
+        "« J'ai vu ce film hier » = I saw this film yesterday (not: I have seen)."
+      ]
+    }
+  ],
+  "irregularParticiples": [
+    { "base": "go", "past": "went", "participle": "gone/been" },
+    { "base": "eat", "past": "ate", "participle": "eaten" },
+    { "base": "see", "past": "saw", "participle": "seen" },
+    { "base": "do", "past": "did", "participle": "done" },
+    { "base": "write", "past": "wrote", "participle": "written" }
+  ],
+  "functionalPhrases": [
+    "Have you ever ...?",
+    "I've never ...",
+    "I've already ... but I haven't ... yet.",
+    "It was a great experience."
+  ],
+  "speakingTasks": [
+    {
+      "id": "task-1",
+      "type": "describe",
+      "prompt": "Tell me about something interesting you have done in your life.",
+      "targetKeywordIds": ["kw-experience", "kw-ever", "kw-never"],
+      "targetGrammarIds": ["gr-present-perfect-form"],
+      "expectedDurationSec": 30,
+      "difficulty": 1
+    },
+    {
+      "id": "task-2",
+      "type": "roleplay",
+      "prompt": "You meet a new classmate. Ask three questions about places they have visited or food they have tried.",
+      "targetKeywordIds": ["kw-ever", "kw-travel-abroad"],
+      "targetGrammarIds": ["gr-present-perfect-form"],
+      "expectedDurationSec": 40,
+      "difficulty": 2
+    },
+    {
+      "id": "task-3",
+      "type": "retell",
+      "prompt": "Say one thing you have already done today and one thing you haven't done yet. Then tell me about one thing you did yesterday.",
+      "targetKeywordIds": ["kw-already", "kw-yet"],
+      "targetGrammarIds": ["gr-present-perfect-form", "gr-present-perfect-vs-past-simple"],
+      "expectedDurationSec": 45,
+      "difficulty": 3
+    }
+  ],
+  "scope": {
+    "allowedTopics": ["travel", "food", "school life", "hobbies", "daily activities"],
+    "outOfScope": ["past perfect", "present perfect continuous", "politics", "religion", "personal addresses or phone numbers"]
+  },
+  "tutorNotes": "Students are French speakers. Be gentle with participles of irregular verbs: it is the most common difficulty. Keep scenarios imaginary or about everyday life, never ask for private details."
+}
