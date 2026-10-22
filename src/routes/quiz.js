@@ -10,7 +10,8 @@ import { requireActiveEnrollment } from './learn.js';
 import { QUIZ_TYPES, parseAnswers, gradeAttempt, isExpired, deadlineOf } from '../lib/quiz.js';
 
 // Passage des quiz par l'élève. La notation se fait ici, côté serveur.
-// Avant la soumission : jamais de bonne réponse ni d'explication. Après : note, bonnes réponses et explications.
+// Avant la soumission : jamais de bonne réponse ni d'explication. Après : la note, puis les bonnes réponses et explications
+// seulement quand le quiz est réussi ou que toutes les tentatives sont utilisées.
 const router = Router();
 router.use(requireAuth);
 
@@ -56,8 +57,20 @@ const attemptInfo = (attempt, assessment) => ({
   deadline: deadlineOf(attempt.startedAt, assessment.timeLimitMin),
 });
 
-// Correction détaillée d'une tentative terminée : bonnes réponses, choix de l'élève, explications
-async function buildReview(attempt) {
+// Les bonnes réponses et les explications ne sont montrées qu'une fois le quiz réussi ou toutes les tentatives
+// utilisées : sinon l'élève pourrait les mémoriser avant de recommencer. Entre-temps, il voit sa note et,
+// pour chaque question, si sa réponse était juste ou fausse (mais pas la bonne réponse).
+async function canRevealAnswers(assessment, enrollmentId) {
+  const where = { assessmentId: assessment.id, enrollmentId, status: 'submitted' };
+  const [passed, used] = await Promise.all([
+    prisma.attempt.count({ where: { ...where, passed: true } }),
+    prisma.attempt.count({ where }),
+  ]);
+  return passed > 0 || used >= assessment.maxAttempts;
+}
+
+// Correction d'une tentative terminée : choix de l'élève, résultat par question et, si `reveal`, bonnes réponses + explications
+async function buildReview(attempt, reveal) {
   const [questions, answers] = await Promise.all([
     prisma.question.findMany({ where: { assessmentId: attempt.assessmentId }, orderBy: { position: 'asc' }, include: { options: { orderBy: { position: 'asc' } } } }),
     prisma.attemptAnswer.findMany({ where: { attemptId: attempt.id }, include: { selectedOptions: true } }),
@@ -67,10 +80,11 @@ async function buildReview(attempt) {
     const a = byQuestion.get(q.id);
     const chosen = new Set((a?.selectedOptions ?? []).map((s) => s.optionId));
     return {
-      id: q.id, type: q.type, text: q.text, explanation: q.explanation, points: q.points,
+      id: q.id, type: q.type, text: q.text, points: q.points,
+      ...(reveal && { explanation: q.explanation }),
       isCorrect: a?.isCorrect ?? false,
       pointsAwarded: Number(a?.pointsAwarded ?? 0),
-      options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, selected: chosen.has(o.id) })),
+      options: q.options.map((o) => ({ id: o.id, text: o.text, selected: chosen.has(o.id), ...(reveal && { isCorrect: o.isCorrect }) })),
     };
   });
 }
@@ -165,11 +179,13 @@ router.post('/attempts/:id/submit', validate(submitSchema), wrap(async (req, res
 
   const moduleResult = await recomputeModuleResult(attempt.enrollmentId, assessment.moduleId);
   const used = await prisma.attempt.count({ where: { assessmentId: assessment.id, enrollmentId: attempt.enrollmentId } });
+  const reveal = await canRevealAnswers(assessment, attempt.enrollmentId);
   res.json({
     attempt: { id: attempt.id, attemptNo: attempt.attemptNo, scorePct: graded.scorePct, passed, passMark: assessment.passMark },
     attemptsLeft: Math.max(0, assessment.maxAttempts - used),
     moduleStatus: moduleResult.status,
-    questions: await buildReview({ ...attempt, id: attempt.id }),
+    answersRevealed: reveal,
+    questions: await buildReview(attempt, reveal),
   });
 }));
 
@@ -180,9 +196,11 @@ router.get('/attempts/:id', wrap(async (req, res) => {
   if (attempt.status === 'in_progress') {
     return res.json({ attempt: attemptInfo(attempt, assessment), questions: await studentQuestions(assessment.id) });
   }
+  const reveal = await canRevealAnswers(assessment, attempt.enrollmentId);
   res.json({
     attempt: { id: attempt.id, attemptNo: attempt.attemptNo, scorePct: Number(attempt.scorePct ?? 0), passed: attempt.passed, passMark: assessment.passMark, submittedAt: attempt.submittedAt },
-    questions: await buildReview(attempt),
+    answersRevealed: reveal,
+    questions: await buildReview(attempt, reveal),
   });
 }));
 

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { wrap, HttpError } from '../lib/http.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, isActiveGuardian } from '../middleware/auth.js';
-import { courseProgress, isModuleUnlocked } from '../lib/progress.js';
+import { courseProgress, isModuleUnlocked, completeEnrollmentIfDone } from '../lib/progress.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -128,7 +128,7 @@ router.get('/lessons/:id', wrap(async (req, res) => {
 
   const [progress, note] = await Promise.all([
     prisma.lessonProgress.findUnique({ where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId: lesson.id } } }),
-    prisma.note.findFirst({ where: { userId: req.user.id, lessonId: lesson.id } }),
+    prisma.note.findUnique({ where: { userId_lessonId: { userId: req.user.id, lessonId: lesson.id } } }),
   ]);
 
   const { chapter, ...l } = lesson;
@@ -155,7 +155,9 @@ router.post('/lessons/:id/complete', wrap(async (req, res) => {
     create: { enrollmentId: enrollment.id, lessonId: lesson.id },
     update: {},
   });
-  res.json({ ok: true, progressPct: await courseProgress(enrollment.id, course.id) });
+  // C'était peut-être la dernière leçon : la formation se termine si tous les modules sont aussi validés.
+  const courseCompleted = await completeEnrollmentIfDone(enrollment.id).catch((e) => { console.error('Fin de formation :', e.message); return false; });
+  res.json({ ok: true, progressPct: await courseProgress(enrollment.id, course.id), courseCompleted });
 }));
 
 router.delete('/lessons/:id/complete', wrap(async (req, res) => {
@@ -165,14 +167,15 @@ router.delete('/lessons/:id/complete', wrap(async (req, res) => {
   res.json({ ok: true, progressPct: await courseProgress(enrollment.id, lesson.chapter.module.courseId) });
 }));
 
-// Notes personnelles : une note par leçon et par utilisateur (upsert manuel, pas de contrainte unique dans le schéma)
+// Notes personnelles : une note par leçon et par utilisateur (contrainte unique en base + upsert atomique)
 router.put('/lessons/:id/note', validate(z.object({ content: z.string().max(10000) })), wrap(async (req, res) => {
   const lesson = await loadLessonContext(req.params.id);
   await requireActiveEnrollment(req.user.id, { courseId: lesson.chapter.module.courseId });
-  const existing = await prisma.note.findFirst({ where: { userId: req.user.id, lessonId: lesson.id } });
-  const note = existing
-    ? await prisma.note.update({ where: { id: existing.id }, data: { content: req.body.content } })
-    : await prisma.note.create({ data: { userId: req.user.id, lessonId: lesson.id, content: req.body.content } });
+  const note = await prisma.note.upsert({
+    where: { userId_lessonId: { userId: req.user.id, lessonId: lesson.id } },
+    create: { userId: req.user.id, lessonId: lesson.id, content: req.body.content },
+    update: { content: req.body.content },
+  });
   res.json(note);
 }));
 

@@ -470,6 +470,7 @@ model Submission {
   attemptNo    Int              @default(1) @map("attempt_no")
   fileUrl      String?          @map("file_url")
   linkUrl      String?          @map("link_url")
+  content      String?          @db.Text
   submittedAt  DateTime         @default(now()) @map("submitted_at")
   status       SubmissionStatus @default(submitted)
   graderId     String?          @map("grader_id") @db.Uuid
@@ -558,7 +559,7 @@ model Note {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
-  @@index([userId, lessonId])
+  @@unique([userId, lessonId])
   @@map("notes")
 }
 

@@ -6,6 +6,7 @@ import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { assertOwnsCourse } from './studio.js';
 import { QUIZ_TYPES, buildTrueFalseOptions, checkOptions } from '../lib/quiz.js';
+import { recomputeModuleResult } from '../lib/progress.js';
 
 // Gestion des quiz par le formateur de la formation (ou l'administrateur).
 // Règle d'intégrité : dès qu'un élève a commencé le quiz, sa structure est figée
@@ -33,6 +34,21 @@ async function loadQuestion(user, id) {
 }
 const hasAttempts = async (assessmentId) => (await prisma.attempt.count({ where: { assessmentId } })) > 0;
 
+// Quand les évaluations obligatoires d'un module changent (ajout, suppression, obligatoire ou non), le résultat
+// « compétent / pas encore compétent » de chaque élève qui en a un est recalculé : sans cela il resterait périmé
+// (ex. un élève resterait « compétent » alors qu'un quiz obligatoire vient d'être ajouté).
+// Une panne ici ne doit pas annuler la modification déjà enregistrée : on la signale dans la réponse.
+async function refreshModuleResults(moduleId) {
+  try {
+    const rows = await prisma.moduleResult.findMany({ where: { moduleId }, select: { enrollmentId: true } });
+    for (const r of rows) await recomputeModuleResult(r.enrollmentId, moduleId);
+    return { studentsRecalculated: rows.length };
+  } catch (e) {
+    console.error('Recalcul des résultats du module :', e.message);
+    return { recalculationFailed: true };
+  }
+}
+
 // ── Quiz ─────────────────────────────────────────────────────
 const assessmentFields = {
   type: z.enum(['quiz', 'mcq']),
@@ -52,7 +68,7 @@ router.post('/modules/:id/assessments', validate(createAssessmentSchema), wrap(a
   await assertOwnsCourse(req.user, mod.courseId);
   const b = req.body;
   const position = await nextPosition('assessment', { moduleId: mod.id });
-  res.status(201).json(await prisma.assessment.create({
+  const created = await prisma.assessment.create({
     data: {
       moduleId: mod.id, position, type: b.type, title: b.title,
       instructions: b.instructions ?? null,
@@ -61,7 +77,9 @@ router.post('/modules/:id/assessments', validate(createAssessmentSchema), wrap(a
       timeLimitMin: b.timeLimitMin ?? null,
       isRequired: b.isRequired ?? true,
     },
-  }));
+  });
+  const refresh = created.isRequired ? await refreshModuleResults(mod.id) : {};
+  res.status(201).json({ ...created, ...refresh });
 }));
 
 // Vue complète du formateur : questions, options et bonnes réponses
@@ -80,13 +98,17 @@ router.patch('/assessments/:id', validate(updateAssessmentSchema), wrap(async (r
   if (req.body.passMark !== undefined && req.body.passMark !== a.passMark && (await hasAttempts(a.id))) {
     throw new HttpError(409, 'Le seuil de réussite ne peut plus changer : des élèves ont déjà passé ce quiz');
   }
-  res.json(await prisma.assessment.update({ where: { id: a.id }, data: req.body }));
+  const updated = await prisma.assessment.update({ where: { id: a.id }, data: req.body });
+  const requiredChanged = req.body.isRequired !== undefined && req.body.isRequired !== a.isRequired;
+  const refresh = requiredChanged ? await refreshModuleResults(a.moduleId) : {};
+  res.json({ ...updated, ...refresh });
 }));
 
 router.delete('/assessments/:id', wrap(async (req, res) => {
   const a = await loadAssessment(req.user, req.params.id);
   if (await hasAttempts(a.id)) throw new HttpError(409, 'Des élèves ont déjà passé ce quiz : il ne peut plus être supprimé');
   await prisma.assessment.delete({ where: { id: a.id } });
+  if (a.isRequired) await refreshModuleResults(a.moduleId);
   res.status(204).end();
 }));
 

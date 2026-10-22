@@ -71,9 +71,46 @@ export async function recomputeModuleResult(enrollmentId, moduleId) {
   }
   const { status, scorePct } = moduleOutcome(ids, passedIds, best);
   const completedAt = status === 'competent' ? (existing?.completedAt ?? new Date()) : null;
-  return prisma.moduleResult.upsert({
+  const result = await prisma.moduleResult.upsert({
     where: { enrollmentId_moduleId: { enrollmentId, moduleId } },
     create: { enrollmentId, moduleId, status, scorePct, completedAt },
     update: { status, scorePct, completedAt },
   });
+  // Un module vient peut-être d'être validé : c'était peut-être le dernier. Une panne ici ne doit pas faire
+  // échouer l'envoi du quiz (la tentative est déjà enregistrée) : elle sera rattrapée à la prochaine action.
+  await completeEnrollmentIfDone(enrollmentId).catch((e) => console.error('Fin de formation :', e.message));
+  return result;
+}
+
+/**
+ * Fin de formation : tous les modules sont « compétents » ET toutes les leçons sont terminées.
+ * L'inscription passe alors à « completed » (avec la date). C'est définitif : un statut « terminée »
+ * ne revient jamais en arrière, même si un quiz obligatoire est ajouté plus tard (le certificat en dépendra).
+ * Retourne true si l'inscription est (ou vient de devenir) terminée.
+ */
+export async function completeEnrollmentIfDone(enrollmentId) {
+  const e = await prisma.enrollment.findUnique({ where: { id: enrollmentId }, select: { id: true, courseId: true, status: true } });
+  if (!e) return false;
+  if (e.status === 'completed') return true;
+  if (e.status !== 'active') return false; // en attente de paiement ou annulée
+
+  const modules = await prisma.module.findMany({ where: { courseId: e.courseId }, orderBy: { position: 'asc' } });
+  if (modules.length === 0) return false;
+
+  const inCourse = { chapter: { module: { courseId: e.courseId } } };
+  const [totalLessons, doneLessons] = await Promise.all([
+    prisma.lesson.count({ where: inCourse }),
+    prisma.lessonProgress.count({ where: { enrollmentId: e.id, lesson: inCourse } }),
+  ]);
+  if (doneLessons < totalLessons) return false;
+  for (const m of modules) {
+    if (!(await isModuleCompetent(e.id, m))) return false;
+  }
+
+  // Seule la première requête qui arrive ici écrit la date ; une autre, simultanée, ne change rien.
+  await prisma.enrollment.updateMany({
+    where: { id: e.id, status: 'active' },
+    data: { status: 'completed', completedAt: new Date() },
+  });
+  return true;
 }
