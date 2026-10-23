@@ -10,9 +10,13 @@
     "db:seed": "node prisma/seed.js",
     "test": "node --test",
     "smoke:quiz": "node scripts/smoke-quiz.mjs",
-    "smoke:notes": "node scripts/smoke-notes.mjs"
+    "smoke:notes": "node scripts/smoke-notes.mjs",
+    "smoke:staff": "node scripts/smoke-staff.mjs",
+    "smoke:assignments": "node scripts/smoke-assignments.mjs"
   },
-  "prisma": { "seed": "node prisma/seed.js" },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "dependencies": {
     "@prisma/client": "^6.0.0",
     "bcryptjs": "^2.4.3",

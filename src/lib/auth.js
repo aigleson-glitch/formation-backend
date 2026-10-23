@@ -6,6 +6,17 @@ import { ageGroupFromBirthDate } from "./ageGroup.js";
 export const hashPassword = (p) => bcrypt.hash(p, 12);
 export const checkPassword = (p, h) => bcrypt.compare(p, h);
 
+// Le jeton est épinglé sur HS256 : un jeton signé autrement (par exemple « none ») est refusé.
+export const verifyToken = (token) => jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
+
+// Compare toujours un hachage, même si le compte n'existe pas : le temps de réponse ne révèle pas si l'e-mail est inscrit.
+let dummyHash;
+export async function verifyLogin(user, password) {
+  dummyHash ??= await bcrypt.hash("mot-de-passe-factice", 12);
+  const ok = await bcrypt.compare(password, user ? user.passwordHash : dummyHash);
+  return Boolean(user) && ok;
+}
+
 export const signToken = (user) =>
   jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",

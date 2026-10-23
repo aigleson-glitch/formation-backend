@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import { wrap, HttpError } from '../lib/http.js';
-import { syncAgeGroup } from '../lib/auth.js';
+import { syncAgeGroup, verifyToken } from '../lib/auth.js';
 import { courseProgress } from '../lib/progress.js';
 
 const router = Router();
@@ -12,7 +11,7 @@ async function optionalAuth(req, _res, next) {
   const h = req.headers.authorization || '';
   if (h.startsWith('Bearer ')) {
     try {
-      const p = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+      const p = verifyToken(h.slice(7));
       const u = await prisma.user.findUnique({ where: { id: p.sub } });
       if (u?.isActive) req.user = await syncAgeGroup(u);
     } catch { /* jeton invalide : on traite comme anonyme */ }

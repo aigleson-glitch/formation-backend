@@ -10,6 +10,10 @@ import studioAiRoutes from "./routes/studioAi.js";
 import studioQuizRoutes from "./routes/studioQuiz.js";
 import quizRoutes from "./routes/quiz.js";
 import practiceRoutes from "./routes/practice.js";
+import adminRoutes from "./routes/admin.js";
+import studioAssignmentRoutes from "./routes/studioAssignment.js";
+import assignmentRoutes from "./routes/assignment.js";
+import parentSubmissionRoutes from "./routes/parentSubmissions.js";
 
 export function createApp() {
   const app = express();
@@ -17,18 +21,25 @@ export function createApp() {
   const tp = process.env.TRUST_PROXY;
   if (tp) app.set("trust proxy", /^\d+$/.test(tp) ? Number(tp) : tp);
   app.use(helmet());
-  app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") ?? true }));
+  // En production, CORS_ORIGIN est obligatoire (vérifié au démarrage) ; en développement, toutes les origines sont acceptées.
+  const origins = (process.env.CORS_ORIGIN ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  app.use(cors({ origin: origins.length ? origins : true }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
   app.use("/auth", authRoutes);
   app.use("/parent", parentRoutes);
+  app.use("/parent", parentSubmissionRoutes);
+  app.use("/admin", adminRoutes);
   app.use("/studio", studioRoutes);
   app.use("/studio", studioAiRoutes);
+  // Les devoirs avant les quiz : leur garde empêche de modifier un devoir par les routes de quiz
+  app.use("/studio", studioAssignmentRoutes);
   app.use("/studio", studioQuizRoutes);
   app.use("/practice", practiceRoutes);
   app.use("/", catalogRoutes);
   app.use("/", quizRoutes);
+  app.use("/", assignmentRoutes);
   app.use("/", learnRoutes);
 
   app.use((req, res) => res.status(404).json({ error: "Route introuvable" }));

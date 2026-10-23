@@ -3,7 +3,7 @@ import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { prisma } from "../lib/prisma.js";
 import { wrap, HttpError } from "../lib/http.js";
-import { hashPassword, checkPassword, signToken, publicUser, syncAgeGroup } from "../lib/auth.js";
+import { hashPassword, verifyLogin, signToken, publicUser, syncAgeGroup } from "../lib/auth.js";
 import { computeAge, ageGroupFromBirthDate } from "../lib/ageGroup.js";
 import { validate } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -86,7 +86,7 @@ router.post("/login", loginLimiter, validate(loginSchema), wrap(async (req, res)
   const user = await prisma.user.findFirst({
     where: identifier.trim().includes("@") ? { email: identifier.trim().toLowerCase() } : { username: identifier.trim().toLowerCase() },
   });
-  if (!user || !(await checkPassword(password, user.passwordHash))) {
+  if (!(await verifyLogin(user, password))) {
     throw new HttpError(401, "Identifiants incorrects");
   }
   if (!user.isActive) {

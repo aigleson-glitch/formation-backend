@@ -3,17 +3,24 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { readFileSync } from "node:fs";
 
+// Données de démonstration : comptes aux mots de passe connus, donc jamais en production.
+if (process.env.NODE_ENV === "production") {
+  console.error("Seed de démonstration interdit en production. Premier administrateur : ADMIN_PASSWORD=... node scripts/create-admin.mjs email Prénom Nom");
+  process.exit(1);
+}
+const DEMO_PASSWORD = process.env.SEED_PASSWORD || "ChangeMe123!";
+
 const prisma = new PrismaClient();
 const hash = (p) => bcrypt.hash(p, 12);
 
 async function main() {
   await prisma.user.upsert({
     where: { email: "admin@example.com" }, update: {},
-    create: { email: "admin@example.com", passwordHash: await hash("ChangeMe123!"), firstName: "Admin", lastName: "Plateforme", role: "admin" },
+    create: { email: "admin@example.com", passwordHash: await hash(DEMO_PASSWORD), firstName: "Admin", lastName: "Plateforme", role: "admin" },
   });
   const teacher = await prisma.user.upsert({
     where: { email: "formateur@example.com" }, update: {},
-    create: { email: "formateur@example.com", passwordHash: await hash("ChangeMe123!"), firstName: "Formateur", lastName: "Démo", role: "instructor", canTeachMinors: true },
+    create: { email: "formateur@example.com", passwordHash: await hash(DEMO_PASSWORD), firstName: "Formateur", lastName: "Démo", role: "instructor", canTeachMinors: true },
   });
 
   const info = await prisma.category.upsert({ where: { slug: "informatique" }, update: { color: "#3f6fd8", icon: "laptop" }, create: { name: "Informatique", slug: "informatique", color: "#3f6fd8", icon: "laptop" } });
