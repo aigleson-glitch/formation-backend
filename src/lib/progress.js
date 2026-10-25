@@ -1,5 +1,6 @@
 import { prisma } from './prisma.js';
 import { moduleOutcome } from './quiz.js';
+import { issueCertificate } from './certificate.js';
 
 /**
  * Règle 2 : progression = (leçons terminées + évaluations réussies) / (total leçons + total évaluations)
@@ -108,9 +109,12 @@ export async function completeEnrollmentIfDone(enrollmentId) {
   }
 
   // Seule la première requête qui arrive ici écrit la date ; une autre, simultanée, ne change rien.
-  await prisma.enrollment.updateMany({
+  const done = await prisma.enrollment.updateMany({
     where: { id: e.id, status: 'active' },
     data: { status: 'completed', completedAt: new Date() },
   });
+  // Le certificat est émis au moment où la formation se termine. Une panne ici ne doit pas annuler la fin de formation :
+  // il sera émis à la prochaine consultation de « Mes certificats ».
+  if (done.count > 0) await issueCertificate(e.id).catch((err) => console.error('Certificat :', err.message));
   return true;
 }

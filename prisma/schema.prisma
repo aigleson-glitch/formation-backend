@@ -367,6 +367,8 @@ model Assessment {
   type         AssessmentType
   title        String
   instructions String?        @db.Text
+  attachmentUrl  String?      @map("attachment_url") // sujet à télécharger (PDF, lien https)
+  attachmentName String?      @map("attachment_name")
   passMark     Int            @default(70) @map("pass_mark")
   maxAttempts  Int            @default(3) @map("max_attempts")
   timeLimitMin Int?           @map("time_limit_min")

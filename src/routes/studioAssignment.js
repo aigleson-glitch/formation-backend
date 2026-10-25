@@ -6,7 +6,7 @@ import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { assertOwnsCourse } from './studio.js';
 import { recomputeModuleResult } from '../lib/progress.js';
-import { ASSIGNMENT_TYPES, OPEN_STATUSES, gradeProblem, isPassed, canRegrade } from '../lib/assignmentRules.js';
+import { ASSIGNMENT_TYPES, OPEN_STATUSES, gradeProblem, isPassed, canRegrade, attachmentProblem } from '../lib/assignmentRules.js';
 
 // Devoirs : côté formateur (création des devoirs, file de correction, correction).
 // Monté AVANT les routes de quiz : celles-ci ne comptent que les tentatives de quiz et laisseraient supprimer
@@ -52,6 +52,8 @@ const fields = {
   type: z.enum(['assignment', 'portfolio']).default('assignment'),
   title: z.string().trim().min(1).max(200),
   instructions: z.string().trim().max(10000).nullable().optional(),
+  attachmentUrl: z.string().trim().max(2100).nullable().optional(), // sujet PDF à télécharger (lien https)
+  attachmentName: z.string().trim().max(250).nullable().optional(),
   passMark: z.number().int().min(0).max(100).optional(),
   maxAttempts: z.number().int().min(1).max(10).optional(),
   isRequired: z.boolean().optional(),
@@ -65,10 +67,14 @@ router.post('/modules/:id/assignments', validate(createSchema), wrap(async (req,
   if (!mod) throw new HttpError(404, 'Module introuvable');
   await assertOwnsCourse(req.user, mod.courseId);
   const b = req.body;
+  const fileProblem = attachmentProblem(b);
+  if (fileProblem) throw new HttpError(422, fileProblem);
   const created = await prisma.assessment.create({
     data: {
       moduleId: mod.id, position: await nextPosition({ moduleId: mod.id }), type: b.type, title: b.title,
       instructions: b.instructions ?? null,
+      attachmentUrl: b.attachmentUrl?.trim() || null,
+      attachmentName: b.attachmentUrl?.trim() ? (b.attachmentName?.trim() || null) : null,
       passMark: b.passMark ?? mod.course.defaultPassMark,
       maxAttempts: b.maxAttempts ?? 3,
       isRequired: b.isRequired ?? true,
@@ -95,7 +101,19 @@ router.patch('/assignments/:id', validate(updateSchema), wrap(async (req, res) =
   if (started && req.body.passMark !== undefined && req.body.passMark !== a.passMark) {
     throw new HttpError(409, 'Le seuil de réussite ne peut plus changer : des élèves ont déjà rendu ce devoir');
   }
-  const updated = await prisma.assessment.update({ where: { id: a.id }, data: req.body });
+  // Le sujet joint : on valide l'état final (ce qui est envoyé, complété par ce qui existe déjà)
+  const data = { ...req.body };
+  if ('attachmentUrl' in req.body || 'attachmentName' in req.body) {
+    const url = 'attachmentUrl' in req.body ? (req.body.attachmentUrl?.trim() || null) : a.attachmentUrl;
+    // Retirer le lien sans envoyer de nouveau nom retire aussi l'ancien nom ; envoyer un nom sans lien reste une erreur
+    const keepOldName = !('attachmentUrl' in req.body) || url;
+    const name = 'attachmentName' in req.body ? (req.body.attachmentName?.trim() || null) : (keepOldName ? a.attachmentName : null);
+    const fileProblem = attachmentProblem({ attachmentUrl: url, attachmentName: name });
+    if (fileProblem) throw new HttpError(422, fileProblem);
+    data.attachmentUrl = url;
+    data.attachmentName = url ? name : null; // retirer le lien retire aussi le nom
+  }
+  const updated = await prisma.assessment.update({ where: { id: a.id }, data });
   const requiredChanged = req.body.isRequired !== undefined && req.body.isRequired !== a.isRequired;
   const refresh = requiredChanged ? await refreshModuleResults(a.moduleId) : {};
   res.json({ ...updated, ...refresh });

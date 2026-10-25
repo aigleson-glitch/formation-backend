@@ -154,6 +154,27 @@ async function main() {
   check('les consignes restent corrigeables (200)', (await call('PATCH', `/studio/assignments/${assign.id}`, tI, { instructions: 'Consigne précisée.' })).status === 200);
   const info = must(await call('GET', `/studio/assignments/${assign.id}`, tI), 200, 'fiche formateur');
   check('fiche formateur : 3 copies, aucune à corriger, devoir figé', info.submissionsCount === 3 && info.toGrade === 0 && info.locked === true);
+  // ── Sujet PDF joint au devoir ──────────────────────────────────
+  console.log('\nSujet joint (PDF à télécharger)');
+  const withFile = must(await mkAssign({ title: 'Devoir avec sujet PDF', isRequired: false, attachmentUrl: 'https://exemple.com/sujets/devoir-2.pdf', attachmentName: 'Sujet du devoir 2' }), 201, 'devoir avec sujet');
+  check('devoir créé avec son sujet', withFile.attachmentUrl === 'https://exemple.com/sujets/devoir-2.pdf' && withFile.attachmentName === 'Sujet du devoir 2', withFile);
+  check('sujet en http refusé (422)', (await mkAssign({ title: 'X', attachmentUrl: 'http://exemple.com/a.pdf' })).status === 422);
+  check('sujet javascript: refusé (422)', (await mkAssign({ title: 'X', attachmentUrl: 'javascript:alert(1)' })).status === 422);
+  check('nom de fichier sans lien refusé (422)', (await mkAssign({ title: 'X', attachmentName: 'Sujet.pdf' })).status === 422);
+  const seenFile = must(await call('GET', `/assignments/${assign.id}`, tS), 200, 'fiche élève');
+  check('un devoir sans sujet n\'a pas de pièce jointe', seenFile.attachment === null);
+  const studentSees = must(await call('GET', `/assignments/${withFile.id}`, tS), 200, 'fiche élève avec sujet');
+  check('l\'élève voit le sujet à télécharger', studentSees.attachment?.url === 'https://exemple.com/sujets/devoir-2.pdf' && studentSees.attachment?.name === 'Sujet du devoir 2', studentSees.attachment);
+  const viewFile = await call('GET', `/studio/assignments/${withFile.id}`, tI);
+  check('le formateur voit le sujet de son devoir', viewFile.json.attachmentUrl === withFile.attachmentUrl);
+  const renamed = await call('PATCH', `/studio/assignments/${withFile.id}`, tI, { attachmentName: 'Sujet corrigé' });
+  check('le nom du sujet se change sans toucher au lien', renamed.status === 200 && renamed.json.attachmentName === 'Sujet corrigé' && renamed.json.attachmentUrl === withFile.attachmentUrl, renamed.json);
+  check('un lien non https est refusé en modification (422)', (await call('PATCH', `/studio/assignments/${withFile.id}`, tI, { attachmentUrl: 'http://exemple.com/x.pdf' })).status === 422);
+  const removed = await call('PATCH', `/studio/assignments/${withFile.id}`, tI, { attachmentUrl: null });
+  check('retirer le lien retire aussi le nom', removed.status === 200 && removed.json.attachmentUrl === null && removed.json.attachmentName === null, removed.json);
+  must(await call('PATCH', `/studio/assignments/${withFile.id}`, tI, { attachmentUrl: 'https://exemple.com/nouveau.pdf', attachmentName: 'Nouveau sujet' }), 200, 'remise du sujet');
+  check('un devoir sans copie, avec sujet, se supprime (204)', (await call('DELETE', `/studio/assignments/${withFile.id}`, tI)).status === 204);
+
   const spare = must(await mkAssign({ title: 'Devoir facultatif', isRequired: false }), 201, 'devoir 2');
   check('un devoir sans copie se supprime (204)', (await call('DELETE', `/studio/assignments/${spare.id}`, tI)).status === 204);
   const old = must(await call('GET', '/studio/submissions?status=graded', tI), 200, 'historique');

@@ -48,6 +48,22 @@ export function gradeProblem({ decision, scorePct, feedback }) {
   return null;
 }
 
+/**
+ * Sujet joint à un devoir (PDF à télécharger) : un lien https, avec un nom d'affichage facultatif.
+ * Le nom sans lien n'a pas de sens ; un lien non https (http, javascript:, data:) est refusé.
+ */
+export function attachmentProblem({ attachmentUrl, attachmentName } = {}) {
+  const url = (attachmentUrl ?? '').trim();
+  const name = (attachmentName ?? '').trim();
+  if (!url) return name ? 'Un nom de fichier exige un lien' : null;
+  if (url.length > MAX_LINK) return 'Le lien du fichier est trop long';
+  let parsed;
+  try { parsed = new URL(url); } catch { return 'Le lien du fichier n\'est pas valide'; }
+  if (parsed.protocol !== 'https:') return 'Le lien du fichier doit commencer par https://';
+  if (name.length > 200) return 'Le nom du fichier est trop long (200 caractères au maximum)';
+  return null;
+}
+
 export const isPassed = (scorePct, passMark) => scorePct >= passMark;
 
 /** Une correction peut être modifiée tant qu'aucune copie plus récente n'existe. */

@@ -14,6 +14,8 @@ import adminRoutes from "./routes/admin.js";
 import studioAssignmentRoutes from "./routes/studioAssignment.js";
 import assignmentRoutes from "./routes/assignment.js";
 import parentSubmissionRoutes from "./routes/parentSubmissions.js";
+import certificateRoutes from "./routes/certificates.js";
+import parentCertificateRoutes from "./routes/parentCertificates.js";
 
 export function createApp() {
   const app = express();
@@ -30,6 +32,7 @@ export function createApp() {
   app.use("/auth", authRoutes);
   app.use("/parent", parentRoutes);
   app.use("/parent", parentSubmissionRoutes);
+  app.use("/parent", parentCertificateRoutes);
   app.use("/admin", adminRoutes);
   app.use("/studio", studioRoutes);
   app.use("/studio", studioAiRoutes);
@@ -38,6 +41,8 @@ export function createApp() {
   app.use("/studio", studioQuizRoutes);
   app.use("/practice", practiceRoutes);
   app.use("/", catalogRoutes);
+  // Les certificats avant les quiz : la vérification est publique, alors que les routes de quiz exigent la connexion sur tout « / »
+  app.use("/", certificateRoutes);
   app.use("/", quizRoutes);
   app.use("/", assignmentRoutes);
   app.use("/", learnRoutes);

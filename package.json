@@ -12,7 +12,8 @@
     "smoke:quiz": "node scripts/smoke-quiz.mjs",
     "smoke:notes": "node scripts/smoke-notes.mjs",
     "smoke:staff": "node scripts/smoke-staff.mjs",
-    "smoke:assignments": "node scripts/smoke-assignments.mjs"
+    "smoke:assignments": "node scripts/smoke-assignments.mjs",
+    "smoke:certificates": "node scripts/smoke-certificates.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

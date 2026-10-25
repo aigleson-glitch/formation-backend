@@ -47,6 +47,7 @@ router.get('/assignments/:id', wrap(async (req, res) => {
   const decision = submitDecision({ maxAttempts: assessment.maxAttempts, submissions: subs });
   res.json({
     id: assessment.id, title: assessment.title, type: assessment.type, instructions: assessment.instructions,
+    attachment: assessment.attachmentUrl ? { url: assessment.attachmentUrl, name: assessment.attachmentName } : null,
     passMark: assessment.passMark, maxAttempts: assessment.maxAttempts, isRequired: assessment.isRequired,
     attemptsLeft: decision.ok ? decision.attemptsLeft : 0,
     canSubmit: decision.ok,

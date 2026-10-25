@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contentProblem, submitDecision, gradeProblem, isPassed, canRegrade } from "../src/lib/assignmentRules.js";
+import { contentProblem, submitDecision, gradeProblem, isPassed, canRegrade, attachmentProblem } from "../src/lib/assignmentRules.js";
 
 test("contentProblem : texte ou lien, au moins un", () => {
   assert.ok(contentProblem({}));
@@ -56,4 +56,17 @@ test("canRegrade : seulement la dernière copie, seulement si corrigée", () => 
   assert.equal(canRegrade({ status: "graded", attemptNo: 2 }, 2), true);
   assert.equal(canRegrade({ status: "graded", attemptNo: 1 }, 2), false);
   assert.equal(canRegrade({ status: "resubmit", attemptNo: 2 }, 2), false);
+});
+
+test("attachmentProblem : sujet joint en https, nom facultatif", () => {
+  assert.equal(attachmentProblem({}), null);
+  assert.equal(attachmentProblem({ attachmentUrl: "https://drive.google.com/file/d/abc/view" }), null);
+  assert.equal(attachmentProblem({ attachmentUrl: "https://exemple.com/sujet.pdf", attachmentName: "Sujet du devoir 1" }), null);
+  assert.match(attachmentProblem({ attachmentUrl: "http://exemple.com/sujet.pdf" }), /https/);
+  assert.match(attachmentProblem({ attachmentUrl: "javascript:alert(1)" }), /https/);
+  assert.match(attachmentProblem({ attachmentUrl: "data:application/pdf;base64,AAAA" }), /https/);
+  assert.match(attachmentProblem({ attachmentUrl: "pas un lien" }), /pas valide/);
+  assert.match(attachmentProblem({ attachmentName: "Sujet.pdf" }), /exige un lien/);
+  assert.ok(attachmentProblem({ attachmentUrl: "https://exemple.com/a.pdf", attachmentName: "x".repeat(201) }));
+  assert.ok(attachmentProblem({ attachmentUrl: "https://exemple.com/" + "a".repeat(2100) }));
 });
