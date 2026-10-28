@@ -16,6 +16,7 @@ import assignmentRoutes from "./routes/assignment.js";
 import parentSubmissionRoutes from "./routes/parentSubmissions.js";
 import certificateRoutes from "./routes/certificates.js";
 import resultsRoutes from "./routes/results.js";
+import parentResultsRoutes from "./routes/parentResults.js";
 import parentCertificateRoutes from "./routes/parentCertificates.js";
 
 export function createApp() {
@@ -34,6 +35,7 @@ export function createApp() {
   app.use("/parent", parentRoutes);
   app.use("/parent", parentSubmissionRoutes);
   app.use("/parent", parentCertificateRoutes);
+  app.use("/parent", parentResultsRoutes);
   app.use("/admin", adminRoutes);
   app.use("/studio", studioRoutes);
   app.use("/studio", studioAiRoutes);
