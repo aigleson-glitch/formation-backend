@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { assertOwnsCourse } from './studio.js';
 import { recomputeModuleResult } from '../lib/progress.js';
 import { ASSIGNMENT_TYPES, OPEN_STATUSES, gradeProblem, isPassed, canRegrade, attachmentProblem } from '../lib/assignmentRules.js';
+import { fileView } from '../lib/uploadRules.js';
 
 // Devoirs : côté formateur (création des devoirs, file de correction, correction).
 // Monté AVANT les routes de quiz : celles-ci ne comptent que les tentatives de quiz et laisseraient supprimer
@@ -157,6 +158,7 @@ router.get('/submissions', wrap(async (req, res) => {
       where, orderBy: { submittedAt: status === 'open' ? 'asc' : 'desc' }, skip: (page - 1) * pageSize, take: pageSize,
       select: {
         id: true, attemptNo: true, status: true, submittedAt: true, scorePct: true, passed: true,
+        file: { select: { id: true } },
         assessment: { select: { id: true, title: true, module: { select: { title: true, course: { select: { id: true, title: true } } } } } },
         enrollment: { select: { user: { select: { id: true, firstName: true, lastName: true, ageGroup: true } } } },
       },
@@ -165,7 +167,7 @@ router.get('/submissions', wrap(async (req, res) => {
   res.json({
     page, pageSize, total,
     items: rows.map((s) => ({
-      id: s.id, attemptNo: s.attemptNo, status: s.status, submittedAt: s.submittedAt,
+      id: s.id, attemptNo: s.attemptNo, status: s.status, submittedAt: s.submittedAt, hasFile: !!s.file,
       scorePct: s.scorePct === null ? null : Number(s.scorePct), passed: s.passed,
       assignment: { id: s.assessment.id, title: s.assessment.title },
       module: s.assessment.module.title, course: s.assessment.module.course,
@@ -178,7 +180,7 @@ async function loadSubmission(user, id) {
   if (!UUID.test(id)) throw new HttpError(404, 'Copie introuvable');
   const s = await prisma.submission.findUnique({
     where: { id },
-    include: { assessment: { include: { module: { include: { course: true } } } }, enrollment: { include: { user: true } } },
+    include: { assessment: { include: { module: { include: { course: true } } } }, enrollment: { include: { user: true } }, file: true },
   });
   if (!s) throw new HttpError(404, 'Copie introuvable');
   await assertOwnsCourse(user, s.assessment.module.courseId);
@@ -195,7 +197,7 @@ router.get('/submissions/:id', wrap(async (req, res) => {
   const u = s.enrollment.user;
   res.json({
     id: s.id, attemptNo: s.attemptNo, status: s.status, submittedAt: s.submittedAt,
-    content: s.content, linkUrl: s.linkUrl,
+    content: s.content, linkUrl: s.linkUrl, file: fileView(s.file),
     scorePct: s.scorePct === null ? null : Number(s.scorePct), passed: s.passed, feedback: s.feedback, gradedAt: s.gradedAt, graderId: s.graderId,
     assignment: { id: s.assessment.id, title: s.assessment.title, instructions: s.assessment.instructions, passMark: s.assessment.passMark },
     course: { id: s.assessment.module.course.id, title: s.assessment.module.course.title },

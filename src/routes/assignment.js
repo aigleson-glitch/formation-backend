@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { isModuleUnlocked } from '../lib/progress.js';
 import { requireActiveEnrollment } from './learn.js';
 import { ASSIGNMENT_TYPES, contentProblem, submitDecision } from '../lib/assignmentRules.js';
+import { fileView } from '../lib/uploadRules.js';
 
 // Devoirs : côté élève. L'élève dépose un texte et/ou un lien (https) ; le formateur corrige (routes /studio/submissions).
 // La note, le commentaire et le statut « corrigé » n'apparaissent qu'une fois la correction faite.
@@ -15,7 +16,7 @@ router.use(requireAuth);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function accessAssignment(user, id) {
+export async function accessAssignment(user, id) {
   if (!UUID.test(id)) throw new HttpError(404, 'Devoir introuvable');
   const assessment = await prisma.assessment.findUnique({ where: { id }, include: { module: { include: { course: true } } } });
   if (!assessment || !ASSIGNMENT_TYPES.includes(assessment.type)) throw new HttpError(404, 'Devoir introuvable');
@@ -33,7 +34,7 @@ export function ownSubmissionView(s) {
   const corrected = s.status === 'graded' || s.status === 'resubmit';
   return {
     id: s.id, attemptNo: s.attemptNo, status: s.status, submittedAt: s.submittedAt,
-    content: s.content, linkUrl: s.linkUrl,
+    content: s.content, linkUrl: s.linkUrl, file: fileView(s.file),
     ...(corrected && { scorePct: s.scorePct === null ? null : Number(s.scorePct), passed: s.passed, feedback: s.feedback, gradedAt: s.gradedAt }),
   };
 }
@@ -43,6 +44,7 @@ router.get('/assignments/:id', wrap(async (req, res) => {
   const subs = await prisma.submission.findMany({
     where: { assessmentId: assessment.id, enrollmentId: enrollment.id },
     orderBy: { attemptNo: 'asc' },
+    include: { file: true },
   });
   const decision = submitDecision({ maxAttempts: assessment.maxAttempts, submissions: subs });
   res.json({
@@ -59,11 +61,12 @@ router.get('/assignments/:id', wrap(async (req, res) => {
 const submitSchema = z.object({
   content: z.string().max(20500).nullable().optional(),
   linkUrl: z.string().max(2100).nullable().optional(),
+  fileId: z.string().uuid().nullable().optional(), // fichier envoyé avant par PUT /assignments/:id/files
 });
 
 router.post('/assignments/:id/submissions', validate(submitSchema), wrap(async (req, res) => {
   const { assessment, enrollment } = await accessAssignment(req.user, req.params.id);
-  const problem = contentProblem(req.body);
+  const problem = contentProblem({ ...req.body, hasFile: !!req.body.fileId });
   if (problem) throw new HttpError(422, problem);
 
   const subs = await prisma.submission.findMany({
@@ -75,11 +78,22 @@ router.post('/assignments/:id/submissions', validate(submitSchema), wrap(async (
 
   const attemptNo = subs.reduce((m, s) => Math.max(m, s.attemptNo), 0) + 1;
   try {
-    const created = await prisma.submission.create({
-      data: {
-        assessmentId: assessment.id, enrollmentId: enrollment.id, attemptNo,
-        content: req.body.content?.trim() || null, linkUrl: req.body.linkUrl?.trim() || null,
-      },
+    // La copie et le rattachement du fichier forment un tout : si le fichier n'est pas à l'élève, ou déjà rendu, rien n'est créé
+    const created = await prisma.$transaction(async (tx) => {
+      const sub = await tx.submission.create({
+        data: {
+          assessmentId: assessment.id, enrollmentId: enrollment.id, attemptNo,
+          content: req.body.content?.trim() || null, linkUrl: req.body.linkUrl?.trim() || null,
+        },
+      });
+      if (req.body.fileId) {
+        const attached = await tx.submissionFile.updateMany({
+          where: { id: req.body.fileId, ownerId: req.user.id, assessmentId: assessment.id, submissionId: null },
+          data: { submissionId: sub.id },
+        });
+        if (attached.count !== 1) throw new HttpError(422, 'Fichier introuvable ou déjà utilisé : envoyez-le à nouveau');
+      }
+      return tx.submission.findUnique({ where: { id: sub.id }, include: { file: true } });
     });
     res.status(201).json(ownSubmissionView(created));
   } catch (e) {

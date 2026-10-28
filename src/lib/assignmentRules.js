@@ -5,11 +5,11 @@ export const OPEN_STATUSES = ['submitted', 'in_review']; // en attente de correc
 export const MAX_CONTENT = 20000;
 export const MAX_LINK = 2000;
 
-/** Un devoir contient un texte, un lien, ou les deux. Le lien doit être en https. */
-export function contentProblem({ content, linkUrl } = {}) {
+/** Un devoir contient un texte, un lien, un fichier, ou plusieurs. Le lien doit être en https. */
+export function contentProblem({ content, linkUrl, hasFile } = {}) {
   const text = (content ?? '').trim();
   const link = (linkUrl ?? '').trim();
-  if (!text && !link) return 'Ajoutez un texte ou un lien';
+  if (!text && !link && !hasFile) return 'Ajoutez un texte, un lien ou un fichier';
   if (text.length > MAX_CONTENT) return `Le texte ne peut pas dépasser ${MAX_CONTENT} caractères`;
   if (link) {
     if (link.length > MAX_LINK) return 'Le lien est trop long';

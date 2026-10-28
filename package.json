@@ -13,7 +13,8 @@
     "smoke:notes": "node scripts/smoke-notes.mjs",
     "smoke:staff": "node scripts/smoke-staff.mjs",
     "smoke:assignments": "node scripts/smoke-assignments.mjs",
-    "smoke:certificates": "node scripts/smoke-certificates.mjs"
+    "smoke:certificates": "node scripts/smoke-certificates.mjs",
+    "smoke:files": "node scripts/smoke-files.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
