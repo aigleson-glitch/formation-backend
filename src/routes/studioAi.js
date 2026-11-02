@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { wrap, HttpError } from "../lib/http.js";
 import { validate } from "../middleware/validate.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { assertOwnsCourse } from "./studio.js";
+import { assertOwnsCourse } from "../lib/studioAccess.js";
 import { chapterProfileSchema, UUID_RE } from "../lib/chapterProfile.js";
 
 // Gestion du profil IA d'un chapitre par le formateur (ou l'administrateur)

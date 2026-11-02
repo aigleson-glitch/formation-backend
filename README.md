@@ -12,6 +12,8 @@ npm run dev
 npm test
 ```
 
+Le schéma actif de cette API est `prisma/schema.prisma` ; les migrations correspondantes sont dans `prisma/migrations`.
+
 ## Endpoints principaux
 | Méthode | Route | Rôle |
 |---|---|---|

@@ -127,6 +127,7 @@ router.post('/assessments/:id/attempts', wrap(async (req, res) => {
   let created = false;
   if (!current) {
     const used = await prisma.attempt.count({ where });
+    if (await prisma.attempt.count({ where: { ...where, status: 'submitted', scorePct: { gte: 100 } } })) throw new HttpError(403, 'Note maximale déjà obtenue : inutile de recommencer');
     if (used >= assessment.maxAttempts) throw new HttpError(403, 'Nombre maximal de tentatives atteint');
     try {
       current = await prisma.attempt.create({ data: { ...where, attemptNo: used + 1 } });

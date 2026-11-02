@@ -14,6 +14,7 @@ import adminRoutes from "./routes/admin.js";
 import studioAssignmentRoutes from "./routes/studioAssignment.js";
 import assignmentRoutes from "./routes/assignment.js";
 import fileRoutes from "./routes/files.js";
+import assignmentSubjectRoutes from "./routes/assignmentSubject.js";
 import parentSubmissionRoutes from "./routes/parentSubmissions.js";
 import certificateRoutes from "./routes/certificates.js";
 import resultsRoutes from "./routes/results.js";
@@ -52,6 +53,7 @@ export function createApp() {
   app.use("/", assignmentRoutes);
 
   app.use("/", fileRoutes);
+  app.use("/", assignmentSubjectRoutes);
   app.use("/", learnRoutes);
 
   app.use((req, res) => res.status(404).json({ error: "Route introuvable" }));

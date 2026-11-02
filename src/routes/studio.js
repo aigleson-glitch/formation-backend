@@ -4,8 +4,14 @@ import { prisma } from '../lib/prisma.js';
 import { wrap, HttpError } from '../lib/http.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { UUID_RE } from '../lib/chapterProfile.js';
 import { hasMinors, minorsRuleProblem, reorderProblem, mediaProblem, isPlayable } from '../lib/studioRules.js';
+import { assertOwnsCourse } from '../lib/studioAccess.js';
+
+import { UUID_RE } from '../lib/chapterProfile.js';
+
+const checkId = (id, what = 'Élément') => {
+  if (!UUID_RE.test(String(id))) throw new HttpError(404, `${what} introuvable`);
+};
 
 const router = Router();
 router.use(requireAuth, requireRole('instructor', 'admin'));
@@ -14,10 +20,6 @@ const adminOnly = requireRole('admin');
 const slugify = (s) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-const checkId = (id, what = 'Élément') => {
-  if (!UUID_RE.test(String(id))) throw new HttpError(404, `${what} introuvable`);
-};
-
 // Formateurs d'une formation, avec ce qu'il faut pour la règle 15
 async function instructorsOf(courseId) {
   const links = await prisma.courseInstructor.findMany({
@@ -25,16 +27,6 @@ async function instructorsOf(courseId) {
     select: { user: { select: { id: true, firstName: true, lastName: true, canTeachMinors: true, isActive: true } } },
   });
   return links.map((l) => l.user);
-}
-
-export async function assertOwnsCourse(user, courseId) {
-  checkId(courseId, 'Formation');
-  const course = await prisma.course.findUnique({ where: { id: courseId }, include: { audiences: true } });
-  if (!course) throw new HttpError(404, 'Formation introuvable');
-  if (user.role === 'admin') return course;
-  const link = await prisma.courseInstructor.findUnique({ where: { courseId_userId: { courseId, userId: user.id } } });
-  if (!link) throw new HttpError(403, 'Cette formation ne vous est pas affectée');
-  return course;
 }
 
 // Supprimer ou réordonner du contenu d'une formation suivie détruirait ou bouleverserait des résultats d'élèves.

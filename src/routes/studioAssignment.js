@@ -4,10 +4,11 @@ import { prisma } from '../lib/prisma.js';
 import { wrap, HttpError } from '../lib/http.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { assertOwnsCourse } from './studio.js';
+import { assertOwnsCourse } from '../lib/studioAccess.js';
 import { recomputeModuleResult } from '../lib/progress.js';
 import { ASSIGNMENT_TYPES, OPEN_STATUSES, gradeProblem, isPassed, canRegrade, attachmentProblem } from '../lib/assignmentRules.js';
 import { fileView } from '../lib/uploadRules.js';
+import { removeBytes } from '../lib/fileStore.js';
 
 // Devoirs : côté formateur (création des devoirs, file de correction, correction).
 // Monté AVANT les routes de quiz : celles-ci ne comptent que les tentatives de quiz et laisseraient supprimer
@@ -113,8 +114,10 @@ router.patch('/assignments/:id', validate(updateSchema), wrap(async (req, res) =
     if (fileProblem) throw new HttpError(422, fileProblem);
     data.attachmentUrl = url;
     data.attachmentName = url ? name : null; // retirer le lien retire aussi le nom
+    if (url && a.attachmentKey) Object.assign(data, { attachmentKey: null, attachmentMime: null, attachmentSize: null }); // un lien remplace le fichier
   }
   const updated = await prisma.assessment.update({ where: { id: a.id }, data });
+  if (data.attachmentKey === null && a.attachmentKey) await removeBytes(a.attachmentKey).catch(() => {});
   const requiredChanged = req.body.isRequired !== undefined && req.body.isRequired !== a.isRequired;
   const refresh = requiredChanged ? await refreshModuleResults(a.moduleId) : {};
   res.json({ ...updated, ...refresh });
@@ -126,6 +129,7 @@ router.delete('/assignments/:id', wrap(async (req, res) => {
     throw new HttpError(409, 'Des élèves ont déjà rendu ce devoir : il ne peut plus être supprimé');
   }
   await prisma.assessment.delete({ where: { id: a.id } });
+  if (a.attachmentKey) await removeBytes(a.attachmentKey).catch(() => {});
   if (a.isRequired) await refreshModuleResults(a.moduleId);
   res.status(204).end();
 }));

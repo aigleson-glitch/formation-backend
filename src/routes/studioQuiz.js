@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { wrap, HttpError } from '../lib/http.js';
 import { validate } from '../middleware/validate.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { assertOwnsCourse } from './studio.js';
+import { assertOwnsCourse } from '../lib/studioAccess.js';
 import { QUIZ_TYPES, buildTrueFalseOptions, checkOptions } from '../lib/quiz.js';
 import { recomputeModuleResult } from '../lib/progress.js';
 

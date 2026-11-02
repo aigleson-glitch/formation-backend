@@ -5,14 +5,21 @@ export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Authentification requise" });
+
+  let payload;
   try {
-    const payload = verifyToken(token);
+    payload = verifyToken(token);
+  } catch {
+    return res.status(401).json({ error: "Jeton invalide ou expiré" });
+  }
+
+  try {
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) return res.status(401).json({ error: "Compte inactif ou introuvable" });
     req.user = await syncAgeGroup(user);
     next();
-  } catch {
-    res.status(401).json({ error: "Jeton invalide ou expiré" });
+  } catch (error) {
+    next(error);
   }
 }
 
